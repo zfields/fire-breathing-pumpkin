@@ -1,23 +1,30 @@
-#include <ESP32Servo.h>
+#ifdef ARDUINO_ARCH_ESP32
+  #include <ESP32Servo.h>
+#else
+  #include <Servo.h>
+#endif
 #include <Notecard.h>
 
-#ifdef B0
-#undef B0
-#endif
-#define B0 21
+// Swan Mapping
+#ifdef ARDUINO_SWAN_R5
+  #ifdef CS
+  #undef CS
+  #endif
+  #define CS PD0
 
-#ifdef D5
-#undef D5
-#endif
-#define D5 14
+  #ifdef B0
+  #undef B0
+  #endif
+  #define B0 CS
 
-#ifdef D6
-#undef D6
+  #ifdef BUTTON_BUILTIN
+  #undef BUTTON_BUILTIN
+  #endif
+  #define BUTTON_BUILTIN PC13
 #endif
-#define D6 32
 
 #define serialDebug Serial
-#define productUID "<com.your_company.your_product>"
+#define productUID "com.your-company.your-name:your_product"
 
 static const unsigned int FLAME_OFF = 75;
 static const unsigned int FLAME_ON = 30;
@@ -27,13 +34,21 @@ volatile size_t flame_start_ms = 0;
 volatile bool notehub_request = false;
 
 Notecard notecard;
- 
+
+#ifdef ARDUINO_ARCH_ESP32
 void IRAM_ATTR fireInTheHole() {
+#else
+void fireInTheHole() {
+#endif
   digitalWrite(LED_BUILTIN, HIGH);
   if (!flame_start_ms) { flame_start_ms = millis(); }
 }
 
+#ifdef ARDUINO_ARCH_ESP32
 void IRAM_ATTR notehubRequest() {
+#else
+void notehubRequest() {
+#endif
   notehub_request = true;
   digitalWrite(LED_BUILTIN, HIGH);
   if (!flame_start_ms) { flame_start_ms = millis(); }
@@ -46,7 +61,10 @@ void setup() {
 
   // Attach Button Interrupt
   pinMode(B0, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(B0), fireInTheHole, FALLING);
+  attachInterrupt(digitalPinToInterrupt(B0), fireInTheHole, RISING);
+#ifdef ARDUINO_SWAN_R5
+  attachInterrupt(digitalPinToInterrupt(BUTTON_BUILTIN), fireInTheHole, RISING);
+#endif
 
   // Debug LED (mirrors flame)
   digitalWrite(LED_BUILTIN, LOW);
@@ -107,12 +125,12 @@ void loop() {
         if (J *req = NoteNewRequest("note.get")) {
           JAddStringToObject(req, "file", "flame.qi");
           JAddBoolToObject(req, "delete", true);
-      
+
           if (!notecard.sendRequest(req)) {
             notecard.logDebug("ERROR: Failed to delete Note!\n");
           }
         }
-  
+
         // Rearm ATTN Interrupt
         if (J *req = NoteNewRequest("card.attn")) {
           JAddStringToObject(req, "mode", "arm,files");
